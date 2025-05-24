@@ -4,6 +4,8 @@ from flask_cors import CORS
 import requests
 import time
 
+from config import Config
+
 app = Flask(__name__, static_folder='../static')
 CORS(app, resources={r"/*": {"origins": [
     "https://swingtradingwithme.blogspot.com",
@@ -14,7 +16,7 @@ CORS(app, resources={r"/*": {"origins": [
 ]}}, supports_credentials=True)
 
 # Worker service URL - change this to your actual worker URL in production
-WORKER_URL = "http://127.0.0.1:8000"
+WORKER_URL = Config.WORKER_URL
 
 @app.route('/api/<path:endpoint>', methods=['GET'])
 def proxy_to_worker(endpoint):
