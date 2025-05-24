@@ -25,7 +25,7 @@ def proxy_to_worker(endpoint):
         response = requests.get(
             f"{WORKER_URL}/api/{endpoint}",
             params=request.args,
-            timeout=10
+            timeout=60
         )
         return response.json(), response.status_code
     except requests.exceptions.RequestException as e:
