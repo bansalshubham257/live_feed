@@ -225,7 +225,7 @@ async def websocket_worker():
                             market_ff = full_feed.get("marketFF", {})
                             index_ff = full_feed.get("indexFF", {})
 
-                            ltpc = market_ff.get("ltpc", index_ff.get("ltpc", {}))
+                            ltpc = market_ff.get("ltp", index_ff.get("ltp", {}))
                             oi = market_ff.get("oi", 0)
 
                             volume = 0
@@ -906,7 +906,7 @@ async def get_options_orders_analysis():
             try:
                 stored_ltp = float(order.get('ltp', 0) or 0)
                 current_ltp = float(live_data.get('ltp', stored_ltp) or stored_ltp)
-                
+
                 percent_change = 0
                 if stored_ltp and stored_ltp != 0:
                     percent_change = ((current_ltp - stored_ltp) / stored_ltp) * 100
@@ -916,14 +916,24 @@ async def get_options_orders_analysis():
                 current_ltp = 0
                 percent_change = 0
 
+            # Calculate today's return using prev_close
+            todays_return = 0
+            try:
+                prev_close = float(order.get('prev_close', 0) or 0)
+                if prev_close and prev_close > 0:
+                    todays_return = ((current_ltp - prev_close) / prev_close) * 100
+            except (TypeError, ValueError) as e:
+                print(f"Error calculating today's return: {e}, prev_close={order.get('prev_close')}, current_ltp={current_ltp}")
+                todays_return = 0
+
             # Get live OI and volume from market data
             live_oi = float(live_data.get('oi', 0) or 0)
             live_volume = float(live_data.get('volume', 0) or 0)
-            
+
             # Get original OI and volume
             original_oi = float(order.get('oi', 0) or 0)
             original_volume = float(order.get('volume', 0) or 0)
-            
+
             # Calculate OI and volume changes
             oi_change = ((live_oi - original_oi) / original_oi * 100) if original_oi != 0 else 0
             volume_change = ((live_volume - original_volume) / original_volume * 100) if original_volume != 0 else 0
@@ -952,14 +962,14 @@ async def get_options_orders_analysis():
 
             # Check if status should be "Done" (> 100% change)
             current_status = order.get('status', 'Open')
-            
+
             # Get current less than flags and initialize recovery flags
             is_less_than_25pct = order.get('is_less_than_25pct', False)
             is_less_than_50pct = order.get('is_less_than_50pct', False)
             is_greater_than_25pct = order.get('is_greater_than_25pct', False)
             is_greater_than_50pct = order.get('is_greater_than_50pct', False)
             is_greater_than_75pct = order.get('is_greater_than_75pct', False)
-            
+
             # Track lowest price point
             lowest_point = order.get('lowest_point', min(current_ltp, stored_ltp))
             if current_ltp < lowest_point:
@@ -967,16 +977,17 @@ async def get_options_orders_analysis():
 
             # Check conditions for updating
             need_update = False
-            
-            if abs(percent_change) > 95 and current_status != 'Done':
+
+            # Only mark as Done when percent_change is greater than 90% (not less than 90%)
+            if percent_change > 90 and current_status != 'Done':
                 current_status = 'Done'  # Update for response
                 need_update = True
-            
+
             # Calculate if price is less than 25% or 50% of original price
             if current_ltp < (stored_ltp * 0.25) and not is_less_than_25pct:
                 is_less_than_25pct = True
                 need_update = True
-                
+
             if current_ltp < (stored_ltp * 0.5) and not is_less_than_50pct:
                 is_less_than_50pct = True
                 need_update = True
@@ -992,7 +1003,7 @@ async def get_options_orders_analysis():
             if current_ltp > (stored_ltp * 1.75) and not is_greater_than_75pct:
                 is_greater_than_75pct = True
                 need_update = True
-                
+
             # Mark for update in database if needed
             if need_update:
                 orders_to_update.append({
@@ -1016,6 +1027,7 @@ async def get_options_orders_analysis():
                 'stored_ltp': stored_ltp,
                 'current_ltp': current_ltp,
                 'percent_change': percent_change,
+                'todays_return': todays_return,  # Add today's return to response
                 'status': current_status,  # Use the current status (could be "Done" now)
                 'daysCaptured': days_captured,  # Added days captured
                 'oi': live_oi,  # Use live OI
@@ -1053,8 +1065,9 @@ async def get_options_orders_analysis():
                 'is_greater_than_50pct': is_greater_than_50pct,  # Include the flag
                 'is_greater_than_75pct': is_greater_than_75pct,  # Include the flag
                 'lowest_point': lowest_point,  # Include the lowest point
-                'role': order.get('role', 'Unknown')  # Include role if available
-
+                'role': order.get('role', 'Unknown'),  # Include role if available
+                'pcr': float(order.get('pcr', 0) or 0),
+                'prev_close': float(order.get('prev_close', 0) or 0)
             })
 
         # Update status in database for orders that need it
@@ -1073,128 +1086,6 @@ async def get_options_orders_analysis():
         import traceback
         traceback.print_exc()  # Add traceback for better debugging
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 def close_all_websockets_sync():
     """Synchronous function to close all WebSocket connections at startup."""
